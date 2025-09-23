@@ -61,9 +61,15 @@ namespace Aws
                     toSeat, [allocator](Mqtt5Client *client) { Crt::Delete(client, allocator); });
             }
 
-            Mqtt5Client::operator bool() const noexcept { return m_client_core != nullptr; }
+            Mqtt5Client::operator bool() const noexcept
+            {
+                return m_client_core != nullptr;
+            }
 
-            int Mqtt5Client::LastError() const noexcept { return aws_last_error(); }
+            int Mqtt5Client::LastError() const noexcept
+            {
+                return aws_last_error();
+            }
 
             bool Mqtt5Client::Start() const noexcept
             {
@@ -168,6 +174,11 @@ namespace Aws
                 return m_operationStatistics;
             }
 
+            struct aws_mqtt5_client *Mqtt5Client::GetUnderlyingHandle() const noexcept
+            {
+                return m_client_core->GetUnderlyingHandle();
+            }
+
             /*****************************************************
              *
              * Mqtt5ClientOptions
@@ -242,7 +253,7 @@ namespace Aws
                 return *this;
             }
 
-            Mqtt5ClientOptions &Mqtt5ClientOptions::WithPort(uint16_t port) noexcept
+            Mqtt5ClientOptions &Mqtt5ClientOptions::WithPort(uint32_t port) noexcept
             {
                 m_port = port;
                 return *this;
@@ -407,5 +418,5 @@ namespace Aws
             }
 
         } // namespace Mqtt5
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws

@@ -8,6 +8,7 @@
 #include <aws/crt/auth/Credentials.h>
 #include <aws/crt/auth/Sigv4Signing.h>
 #include <aws/crt/http/HttpRequestResponse.h>
+#include <aws/crt/io/Uri.h>
 
 #if !BYO_CRYPTO
 
@@ -28,7 +29,7 @@ namespace Aws
 
         MqttClientConnectionConfig::MqttClientConnectionConfig(
             const Crt::String &endpoint,
-            uint16_t port,
+            uint32_t port,
             const Crt::Io::SocketOptions &socketOptions,
             Crt::Io::TlsContext &&tlsContext)
             : m_endpoint(endpoint), m_port(port), m_context(std::move(tlsContext)), m_socketOptions(socketOptions),
@@ -38,7 +39,7 @@ namespace Aws
 
         MqttClientConnectionConfig::MqttClientConnectionConfig(
             const Crt::String &endpoint,
-            uint16_t port,
+            uint32_t port,
             const Crt::Io::SocketOptions &socketOptions,
             Crt::Io::TlsContext &&tlsContext,
             Crt::Mqtt::OnWebSocketHandshakeIntercept &&interceptor,
@@ -50,7 +51,7 @@ namespace Aws
 
         MqttClientConnectionConfig::MqttClientConnectionConfig(
             const Crt::String &endpoint,
-            uint16_t port,
+            uint32_t port,
             const Crt::Io::SocketOptions &socketOptions,
             Crt::Io::TlsContext &&tlsContext,
             const Crt::Optional<Crt::Http::HttpClientConnectionProxyOptions> &proxyOptions)
@@ -217,7 +218,7 @@ namespace Aws
             return *this;
         }
 
-        MqttClientConnectionConfigBuilder &MqttClientConnectionConfigBuilder::WithPortOverride(uint16_t port) noexcept
+        MqttClientConnectionConfigBuilder &MqttClientConnectionConfigBuilder::WithPortOverride(uint32_t port) noexcept
         {
             m_portOverride = port;
             return *this;
@@ -287,7 +288,20 @@ namespace Aws
         MqttClientConnectionConfigBuilder &MqttClientConnectionConfigBuilder::WithMinimumTlsVersion(
             aws_tls_versions minimumTlsVersion) noexcept
         {
-            m_contextOptions.SetMinimumTlsVersion(minimumTlsVersion);
+            if (m_contextOptions)
+            {
+                m_contextOptions.SetMinimumTlsVersion(minimumTlsVersion);
+            }
+            return *this;
+        }
+
+        MqttClientConnectionConfigBuilder &MqttClientConnectionConfigBuilder::WithTlsCipherPreference(
+            aws_tls_cipher_pref cipherPref) noexcept
+        {
+            if (m_contextOptions)
+            {
+                m_contextOptions.SetTlsCipherPreference(cipherPref);
+            }
             return *this;
         }
 
@@ -369,9 +383,10 @@ namespace Aws
             {
                 usernameString = AddToUsernameParameter(usernameString, authorizerName, "x-amz-customauthorizer-name=");
             }
-            if (!authorizerSignature.empty())
+
+            if (!authorizerSignature.empty() || !tokenKeyName.empty() || !tokenValue.empty())
             {
-                if (tokenKeyName.empty() || tokenValue.empty())
+                if (authorizerSignature.empty() || tokenKeyName.empty() || tokenValue.empty())
                 {
                     AWS_LOGF_WARN(
                         AWS_LS_MQTT_CLIENT,
@@ -381,20 +396,28 @@ namespace Aws
                         "signed custom authorizer.",
                         (void *)this);
                 }
-                usernameString =
-                    AddToUsernameParameter(usernameString, authorizerSignature, "x-amz-customauthorizer-signature=");
             }
-            if (!tokenKeyName.empty() || !tokenValue.empty())
+
+            if (!authorizerSignature.empty())
             {
-                if (tokenKeyName.empty() || tokenValue.empty())
+                Crt::String encodedSignature;
+                if (authorizerSignature.find('%') != authorizerSignature.npos)
                 {
-                    AWS_LOGF_ERROR(
-                        AWS_LS_MQTT_CLIENT,
-                        "id=%p: Token-based custom authentication requires all token-related properties to be set",
-                        (void *)this);
-                    m_lastError = AWS_ERROR_INVALID_ARGUMENT;
-                    return *this;
+                    // We can assume that a base 64 value that contains a '%' character has already been uri encoded
+                    encodedSignature = std::move(authorizerSignature);
                 }
+                else
+                {
+                    encodedSignature = Aws::Crt::Io::EncodeQueryParameterValue(
+                        aws_byte_cursor_from_c_str(authorizerSignature.c_str()));
+                }
+
+                usernameString =
+                    AddToUsernameParameter(usernameString, encodedSignature, "x-amz-customauthorizer-signature=");
+            }
+
+            if (!tokenKeyName.empty() && !tokenValue.empty())
+            {
                 usernameString = AddToUsernameParameter(usernameString, tokenValue, tokenKeyName + "=");
             }
 
@@ -433,7 +456,7 @@ namespace Aws
                 return MqttClientConnectionConfig::CreateInvalid(m_lastError);
             }
 
-            uint16_t port = m_portOverride;
+            uint32_t port = m_portOverride;
 
             if (!m_portOverride)
             {
@@ -518,13 +541,13 @@ namespace Aws
             auto websocketConfig = m_websocketConfig.value();
             auto signerTransform = [websocketConfig](
                                        std::shared_ptr<Crt::Http::HttpRequest> req,
-                                       const Crt::Mqtt::OnWebSocketHandshakeInterceptComplete &onComplete) {
+                                       const Crt::Mqtt::OnWebSocketHandshakeInterceptComplete &onComplete)
+            {
                 // it is only a very happy coincidence that these function signatures match. This is the callback
                 // for signing to be complete. It invokes the callback for websocket handshake to be complete.
                 auto signingComplete =
-                    [onComplete](const std::shared_ptr<Aws::Crt::Http::HttpRequest> &req1, int errorCode) {
-                        onComplete(req1, errorCode);
-                    };
+                    [onComplete](const std::shared_ptr<Aws::Crt::Http::HttpRequest> &req1, int errorCode)
+                { onComplete(req1, errorCode); };
 
                 auto signerConfig = websocketConfig.CreateSigningConfigCb();
 

@@ -37,6 +37,12 @@ namespace Aws
                        aws_endpoints_request_context_add_boolean(m_allocator, m_requestContext, name, value);
             }
 
+            bool RequestContext::AddStringArray(const ByteCursor &name, const Vector<ByteCursor> &value)
+            {
+                return AWS_OP_SUCCESS != aws_endpoints_request_context_add_string_array(
+                                             m_allocator, m_requestContext, name, value.data(), value.size());
+            }
+
             ResolutionOutcome::ResolutionOutcome(aws_endpoints_resolved_endpoint *impl) : m_resolvedEndpoint(impl) {}
 
             ResolutionOutcome::ResolutionOutcome(ResolutionOutcome &&toMove) noexcept
@@ -55,7 +61,10 @@ namespace Aws
                 return *this;
             }
 
-            ResolutionOutcome::~ResolutionOutcome() { aws_endpoints_resolved_endpoint_release(m_resolvedEndpoint); }
+            ResolutionOutcome::~ResolutionOutcome()
+            {
+                aws_endpoints_resolved_endpoint_release(m_resolvedEndpoint);
+            }
 
             bool ResolutionOutcome::IsEndpoint() const noexcept
             {
@@ -153,7 +162,10 @@ namespace Aws
                 }
             }
 
-            RuleEngine::~RuleEngine() { m_ruleEngine = aws_endpoints_rule_engine_release(m_ruleEngine); }
+            RuleEngine::~RuleEngine()
+            {
+                m_ruleEngine = aws_endpoints_rule_engine_release(m_ruleEngine);
+            }
 
             Optional<ResolutionOutcome> RuleEngine::Resolve(const RequestContext &context) const
             {
@@ -165,5 +177,5 @@ namespace Aws
                 return Optional<ResolutionOutcome>(ResolutionOutcome(resolved));
             }
         } // namespace Endpoints
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws

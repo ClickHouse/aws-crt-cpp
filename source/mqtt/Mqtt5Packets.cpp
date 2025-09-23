@@ -88,6 +88,7 @@ namespace Aws
                     optional.reset();
                 }
             }
+
             void setUserProperties(
                 Vector<UserProperty> &userProperties,
                 const struct aws_mqtt5_user_property *properties,
@@ -95,11 +96,12 @@ namespace Aws
             {
                 for (size_t i = 0; i < propertyCount; ++i)
                 {
-                    userProperties.push_back(UserProperty(
+                    userProperties.emplace_back(
                         Aws::Crt::String((const char *)properties[i].name.ptr, properties[i].name.len),
-                        Aws::Crt::String((const char *)properties[i].value.ptr, properties[i].value.len)));
+                        Aws::Crt::String((const char *)properties[i].value.ptr, properties[i].value.len));
                 }
             }
+
             template <typename T> void setNullableFromOptional(const T *&nullable, const Optional<T> &optional)
             {
                 if (optional.has_value())
@@ -138,7 +140,7 @@ namespace Aws
                 const Crt::Vector<String> &stringVector,
                 Allocator *allocator)
             {
-                AWS_ZERO_STRUCT(dst);
+                aws_array_list_clean_up(&dst);
 
                 if (aws_array_list_init_dynamic(&dst, allocator, stringVector.size(), sizeof(aws_byte_cursor)) !=
                     AWS_OP_SUCCESS)
@@ -278,7 +280,7 @@ namespace Aws
 
             ConnectPacket &ConnectPacket::WithUserProperties(Vector<UserProperty> &&userProperties) noexcept
             {
-                m_userProperties = userProperties;
+                m_userProperties = std::move(userProperties);
                 return *this;
             }
 
@@ -361,13 +363,25 @@ namespace Aws
                 aws_byte_buf_clean_up(&m_passowrdStorage);
             }
 
-            uint16_t ConnectPacket::getKeepAliveIntervalSec() const noexcept { return m_keepAliveIntervalSec; }
+            uint16_t ConnectPacket::getKeepAliveIntervalSec() const noexcept
+            {
+                return m_keepAliveIntervalSec;
+            }
 
-            const Crt::String &ConnectPacket::getClientId() const noexcept { return m_clientId; }
+            const Crt::String &ConnectPacket::getClientId() const noexcept
+            {
+                return m_clientId;
+            }
 
-            const Crt::Optional<Crt::String> &ConnectPacket::getUsername() const noexcept { return m_username; }
+            const Crt::Optional<Crt::String> &ConnectPacket::getUsername() const noexcept
+            {
+                return m_username;
+            }
 
-            const Crt::Optional<Crt::ByteCursor> &ConnectPacket::getPassword() const noexcept { return m_password; }
+            const Crt::Optional<Crt::ByteCursor> &ConnectPacket::getPassword() const noexcept
+            {
+                return m_password;
+            }
 
             const Crt::Optional<uint32_t> &ConnectPacket::getSessionExpiryIntervalSec() const noexcept
             {
@@ -414,41 +428,14 @@ namespace Aws
                 return m_userProperties;
             }
 
-            UserProperty::UserProperty(Crt::String name, Crt::String value) noexcept
+            UserProperty::UserProperty(const Crt::String &name, const Crt::String &value) noexcept
+                : m_name(name), m_value(value)
+            {
+            }
+
+            UserProperty::UserProperty(Crt::String &&name, Crt::String &&value) noexcept
                 : m_name(std::move(name)), m_value(std::move(value))
             {
-            }
-
-            UserProperty::~UserProperty() noexcept {}
-
-            UserProperty::UserProperty(const UserProperty &toCopy) noexcept
-                : m_name(toCopy.getName()), m_value(toCopy.getValue())
-            {
-            }
-
-            UserProperty::UserProperty(UserProperty &&toMove) noexcept
-                : m_name(std::move(toMove.m_name)), m_value(std::move(toMove.m_value))
-            {
-            }
-
-            UserProperty &UserProperty::operator=(const UserProperty &toCopy) noexcept
-            {
-                if (&toCopy != this)
-                {
-                    m_name = toCopy.getName();
-                    m_value = toCopy.getValue();
-                }
-                return *this;
-            }
-
-            UserProperty &UserProperty::operator=(UserProperty &&toMove) noexcept
-            {
-                if (&toMove != this)
-                {
-                    m_name = std::move(toMove.m_name);
-                    m_value = std::move(toMove.m_value);
-                }
-                return *this;
             }
 
             PublishPacket::PublishPacket(const aws_mqtt5_packet_publish_view &packet, Allocator *allocator) noexcept
@@ -560,6 +547,12 @@ namespace Aws
                 return *this;
             }
 
+            PublishPacket &PublishPacket::WithContentType(ByteCursor contentType) noexcept
+            {
+                setPacketByteBufOptional(m_contentType, m_contentTypeStorage, m_allocator, &contentType);
+                return *this;
+            }
+
             PublishPacket &PublishPacket::WithUserProperties(const Vector<UserProperty> &userProperties) noexcept
             {
                 m_userProperties = userProperties;
@@ -568,7 +561,7 @@ namespace Aws
 
             PublishPacket &PublishPacket::WithUserProperties(Vector<UserProperty> &&userProperties) noexcept
             {
-                m_userProperties = userProperties;
+                m_userProperties = std::move(userProperties);
                 return *this;
             }
 
@@ -607,6 +600,10 @@ namespace Aws
                 {
                     raw_options.correlation_data = &m_correlationData.value();
                 }
+                if (m_contentType.has_value())
+                {
+                    raw_options.content_type = &m_contentType.value();
+                }
 
                 s_AllocateUnderlyingUserProperties(m_userPropertiesStorage, m_userProperties, m_allocator);
                 raw_options.user_properties = m_userPropertiesStorage;
@@ -615,13 +612,25 @@ namespace Aws
                 return true;
             }
 
-            const ByteCursor &PublishPacket::getPayload() const noexcept { return m_payload; }
+            const ByteCursor &PublishPacket::getPayload() const noexcept
+            {
+                return m_payload;
+            }
 
-            Mqtt5::QOS PublishPacket::getQOS() const noexcept { return m_qos; }
+            Mqtt5::QOS PublishPacket::getQOS() const noexcept
+            {
+                return m_qos;
+            }
 
-            bool PublishPacket::getRetain() const noexcept { return m_retain; }
+            bool PublishPacket::getRetain() const noexcept
+            {
+                return m_retain;
+            }
 
-            const Crt::String &PublishPacket::getTopic() const noexcept { return m_topicName; }
+            const Crt::String &PublishPacket::getTopic() const noexcept
+            {
+                return m_topicName;
+            }
 
             const Crt::Optional<PayloadFormatIndicator> &PublishPacket::getPayloadFormatIndicator() const noexcept
             {
@@ -633,7 +642,10 @@ namespace Aws
                 return m_messageExpiryIntervalSec;
             }
 
-            const Crt::Optional<uint16_t> &PublishPacket::getTopicAlias() const noexcept { return m_topicAlias; }
+            const Crt::Optional<uint16_t> &PublishPacket::getTopicAlias() const noexcept
+            {
+                return m_topicAlias;
+            }
 
             const Crt::Optional<ByteCursor> &PublishPacket::getResponseTopic() const noexcept
             {
@@ -650,7 +662,10 @@ namespace Aws
                 return m_subscriptionIdentifiers;
             }
 
-            const Crt::Optional<ByteCursor> &PublishPacket::getContentType() const noexcept { return m_contentType; }
+            const Crt::Optional<ByteCursor> &PublishPacket::getContentType() const noexcept
+            {
+                return m_contentType;
+            }
 
             const Crt::Vector<UserProperty> &PublishPacket::getUserProperties() const noexcept
             {
@@ -738,7 +753,7 @@ namespace Aws
 
             DisconnectPacket &DisconnectPacket::WithUserProperties(Vector<UserProperty> &&userProperties) noexcept
             {
-                m_userProperties = userProperties;
+                m_userProperties = std::move(userProperties);
                 return *this;
             }
 
@@ -748,7 +763,10 @@ namespace Aws
                 return *this;
             }
 
-            DisconnectReasonCode DisconnectPacket::getReasonCode() const noexcept { return m_reasonCode; }
+            DisconnectReasonCode DisconnectPacket::getReasonCode() const noexcept
+            {
+                return m_reasonCode;
+            }
 
             const Crt::Optional<uint32_t> &DisconnectPacket::getSessionExpiryIntervalSec() const noexcept
             {
@@ -798,9 +816,15 @@ namespace Aws
                 setUserProperties(m_userProperties, packet.user_properties, packet.user_property_count);
             }
 
-            PubAckReasonCode PubAckPacket::getReasonCode() const noexcept { return m_reasonCode; }
+            PubAckReasonCode PubAckPacket::getReasonCode() const noexcept
+            {
+                return m_reasonCode;
+            }
 
-            const Crt::Optional<Crt::String> &PubAckPacket::getReasonString() const noexcept { return m_reasonString; }
+            const Crt::Optional<Crt::String> &PubAckPacket::getReasonString() const noexcept
+            {
+                return m_reasonString;
+            }
 
             const Crt::Vector<UserProperty> &PubAckPacket::getUserProperties() const noexcept
             {
@@ -830,9 +854,15 @@ namespace Aws
                 setPacketStringOptional(m_serverReference, packet.server_reference);
             }
 
-            bool ConnAckPacket::getSessionPresent() const noexcept { return m_sessionPresent; }
+            bool ConnAckPacket::getSessionPresent() const noexcept
+            {
+                return m_sessionPresent;
+            }
 
-            ConnectReasonCode ConnAckPacket::getReasonCode() const noexcept { return m_reasonCode; }
+            ConnectReasonCode ConnAckPacket::getReasonCode() const noexcept
+            {
+                return m_reasonCode;
+            }
 
             const Crt::Optional<uint32_t> &ConnAckPacket::getSessionExpiryIntervalSec() const noexcept
             {
@@ -849,9 +879,15 @@ namespace Aws
                 return m_receiveMaximum;
             }
 
-            const Crt::Optional<QOS> &ConnAckPacket::getMaximumQOS() const noexcept { return m_maximumQOS; }
+            const Crt::Optional<QOS> &ConnAckPacket::getMaximumQOS() const noexcept
+            {
+                return m_maximumQOS;
+            }
 
-            const Crt::Optional<bool> &ConnAckPacket::getRetainAvailable() const noexcept { return m_retainAvailable; }
+            const Crt::Optional<bool> &ConnAckPacket::getRetainAvailable() const noexcept
+            {
+                return m_retainAvailable;
+            }
 
             const Crt::Optional<uint32_t> &ConnAckPacket::getMaximumPacketSize() const noexcept
             {
@@ -868,9 +904,15 @@ namespace Aws
                 return m_topicAliasMaximum;
             }
 
-            const Crt::Optional<String> &ConnAckPacket::getReasonString() const noexcept { return m_reasonString; }
+            const Crt::Optional<String> &ConnAckPacket::getReasonString() const noexcept
+            {
+                return m_reasonString;
+            }
 
-            const Vector<UserProperty> &ConnAckPacket::getUserProperty() const noexcept { return m_userProperties; }
+            const Vector<UserProperty> &ConnAckPacket::getUserProperty() const noexcept
+            {
+                return m_userProperties;
+            }
 
             const Crt::Optional<bool> &ConnAckPacket::getWildcardSubscriptionsAvailable() const noexcept
             {
@@ -936,7 +978,10 @@ namespace Aws
                 m_noLocal = noLocal;
                 return *this;
             }
-            Subscription &Subscription::WithRetain(bool retain) noexcept { return WithRetainAsPublished(retain); }
+            Subscription &Subscription::WithRetain(bool retain) noexcept
+            {
+                return WithRetainAsPublished(retain);
+            }
             Subscription &Subscription::WithRetainAsPublished(bool retain) noexcept
             {
                 m_retainAsPublished = retain;
@@ -1014,7 +1059,7 @@ namespace Aws
 
             SubscribePacket &SubscribePacket::WithUserProperties(Vector<UserProperty> &&userProperties) noexcept
             {
-                m_userProperties = userProperties;
+                m_userProperties = std::move(userProperties);
                 return *this;
             }
 
@@ -1089,14 +1134,20 @@ namespace Aws
                 }
             }
 
-            const Crt::Optional<Crt::String> &SubAckPacket::getReasonString() const noexcept { return m_reasonString; }
+            const Crt::Optional<Crt::String> &SubAckPacket::getReasonString() const noexcept
+            {
+                return m_reasonString;
+            }
 
             const Crt::Vector<UserProperty> &SubAckPacket::getUserProperties() const noexcept
             {
                 return m_userProperties;
             }
 
-            const Crt::Vector<SubAckReasonCode> &SubAckPacket::getReasonCodes() const noexcept { return m_reasonCodes; }
+            const Crt::Vector<SubAckReasonCode> &SubAckPacket::getReasonCodes() const noexcept
+            {
+                return m_reasonCodes;
+            }
 
             UnsubscribePacket::UnsubscribePacket(Allocator *allocator) noexcept
                 : m_allocator(allocator), m_userPropertiesStorage(nullptr)
@@ -1126,7 +1177,7 @@ namespace Aws
 
             UnsubscribePacket &UnsubscribePacket::WithUserProperties(Vector<UserProperty> &&userProperties) noexcept
             {
-                m_userProperties = userProperties;
+                m_userProperties = std::move(userProperties);
                 return *this;
             }
 
@@ -1217,7 +1268,10 @@ namespace Aws
                     negotiated_settings.client_id_storage.len);
             }
 
-            Mqtt5::QOS NegotiatedSettings::getMaximumQOS() const noexcept { return m_maximumQOS; }
+            Mqtt5::QOS NegotiatedSettings::getMaximumQOS() const noexcept
+            {
+                return m_maximumQOS;
+            }
 
             uint32_t NegotiatedSettings::getSessionExpiryIntervalSec() const noexcept
             {
@@ -1249,11 +1303,20 @@ namespace Aws
                 return m_topicAliasMaximumToClient;
             }
 
-            uint16_t NegotiatedSettings::getServerKeepAliveSec() const noexcept { return m_serverKeepAliveSec; }
+            uint16_t NegotiatedSettings::getServerKeepAliveSec() const noexcept
+            {
+                return m_serverKeepAliveSec;
+            }
 
-            uint16_t NegotiatedSettings::getServerKeepAlive() const noexcept { return getServerKeepAliveSec(); }
+            uint16_t NegotiatedSettings::getServerKeepAlive() const noexcept
+            {
+                return getServerKeepAliveSec();
+            }
 
-            bool NegotiatedSettings::getRetainAvailable() const noexcept { return m_retainAvailable; }
+            bool NegotiatedSettings::getRetainAvailable() const noexcept
+            {
+                return m_retainAvailable;
+            }
 
             bool NegotiatedSettings::getWildcardSubscriptionsAvailable() const noexcept
             {
@@ -1270,18 +1333,30 @@ namespace Aws
                 return m_sharedSubscriptionsAvailable;
             }
 
-            bool NegotiatedSettings::getRejoinedSession() const noexcept { return m_rejoinedSession; }
+            bool NegotiatedSettings::getRejoinedSession() const noexcept
+            {
+                return m_rejoinedSession;
+            }
 
-            const Crt::String &NegotiatedSettings::getClientId() const noexcept { return m_clientId; }
+            const Crt::String &NegotiatedSettings::getClientId() const noexcept
+            {
+                return m_clientId;
+            }
 
             PublishResult::PublishResult() : m_ack(nullptr), m_errorCode(0) {}
 
-            PublishResult::PublishResult(std::shared_ptr<PubAckPacket> puback) : m_errorCode(0) { m_ack = puback; }
+            PublishResult::PublishResult(std::shared_ptr<PubAckPacket> puback) : m_errorCode(0)
+            {
+                m_ack = puback;
+            }
 
             PublishResult::PublishResult(int error) : m_ack(nullptr), m_errorCode(error) {}
 
-            PublishResult::~PublishResult() noexcept { m_ack.reset(); }
+            PublishResult::~PublishResult() noexcept
+            {
+                m_ack.reset();
+            }
 
         } // namespace Mqtt5
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws
