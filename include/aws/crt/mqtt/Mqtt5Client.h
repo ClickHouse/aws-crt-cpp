@@ -433,7 +433,9 @@ namespace Aws
                  */
                 const Mqtt5ClientOperationStatistics &GetOperationStatistics() noexcept;
 
-                virtual ~Mqtt5Client();
+                ~Mqtt5Client();
+
+                struct aws_mqtt5_client *GetUnderlyingHandle() const noexcept;
 
               private:
                 Mqtt5Client(const Mqtt5ClientOptions &options, Allocator *allocator = ApiAllocator()) noexcept;
@@ -474,7 +476,7 @@ namespace Aws
                  *
                  * @return this option object
                  */
-                Mqtt5ClientOptions &WithPort(uint16_t port) noexcept;
+                Mqtt5ClientOptions &WithPort(uint32_t port) noexcept;
 
                 /**
                  * Set booststrap for mqtt5 client
@@ -694,7 +696,7 @@ namespace Aws
                  */
                 bool initializeRawOptions(aws_mqtt5_client_options &raw_options) const noexcept;
 
-                virtual ~Mqtt5ClientOptions();
+                ~Mqtt5ClientOptions();
                 Mqtt5ClientOptions(const Mqtt5ClientOptions &) = delete;
                 Mqtt5ClientOptions(Mqtt5ClientOptions &&) = delete;
                 Mqtt5ClientOptions &operator=(const Mqtt5ClientOptions &) = delete;
@@ -754,7 +756,7 @@ namespace Aws
                 /**
                  * Network port of the MQTT server to connect to.
                  */
-                uint16_t m_port;
+                uint32_t m_port;
 
                 /**
                  * Client bootstrap to use.  In almost all cases, this can be left undefined.
@@ -838,5 +840,5 @@ namespace Aws
             };
 
         } // namespace Mqtt5
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws

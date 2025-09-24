@@ -35,7 +35,7 @@ struct AppCtx
     Allocator *allocator;
     struct aws_mutex lock;
     Io::Uri uri;
-    uint16_t port;
+    uint32_t port;
     const char *cacert;
     const char *cert;
     const char *key;
@@ -435,7 +435,7 @@ static int s_AwsMqtt5CanaryOperationSubscribe(struct AwsMqtt5CanaryTestClient *t
         .WithRetainHandlingType(Mqtt5::RetainHandlingType::AWS_MQTT5_RHT_SEND_ON_SUBSCRIBE)
         .WithRetainAsPublished(false);
 
-    std::shared_ptr<Mqtt5::SubscribePacket> packet = std::make_shared<Mqtt5::SubscribePacket>(allocator);
+    std::shared_ptr<Mqtt5::SubscribePacket> packet = Aws::Crt::MakeShared<Mqtt5::SubscribePacket>(allocator, allocator);
     packet->WithSubscription(std::move(subscription1));
     packet->WithSubscription(std::move(subscription2));
 
@@ -479,7 +479,8 @@ static int s_AwsMqtt5CanaryOperationUnsubscribeBad(struct AwsMqtt5CanaryTestClie
     Vector<Aws::Crt::String> topics;
     topics.push_back(Aws::Crt::String(topicArray));
 
-    std::shared_ptr<Mqtt5::UnsubscribePacket> unsubscription = std::make_shared<Mqtt5::UnsubscribePacket>(allocator);
+    std::shared_ptr<Mqtt5::UnsubscribePacket> unsubscription =
+        Aws::Crt::MakeShared<Mqtt5::UnsubscribePacket>(allocator, allocator);
     unsubscription->WithTopicFilters(topics);
 
     ++g_statistic.totalOperations;
@@ -527,7 +528,8 @@ static int s_AwsMqtt5CanaryOperationUnsubscribe(struct AwsMqtt5CanaryTestClient 
     Vector<Aws::Crt::String> topics;
     topics.push_back(Aws::Crt::String(topicArray));
 
-    std::shared_ptr<Mqtt5::UnsubscribePacket> unsubscription = std::make_shared<Mqtt5::UnsubscribePacket>(allocator);
+    std::shared_ptr<Mqtt5::UnsubscribePacket> unsubscription =
+        Aws::Crt::MakeShared<Mqtt5::UnsubscribePacket>(allocator, allocator);
     unsubscription->WithTopicFilters(topics);
 
     ++g_statistic.totalOperations;
@@ -574,7 +576,8 @@ static int s_AwsMqtt5CanaryOperationPublish(
     }
     ByteCursor payload = ByteCursorFromArray(payload_data, payload_size);
 
-    std::shared_ptr<Mqtt5::PublishPacket> packetPublish = std::make_shared<Mqtt5::PublishPacket>(allocator);
+    std::shared_ptr<Mqtt5::PublishPacket> packetPublish =
+        Aws::Crt::MakeShared<Mqtt5::PublishPacket>(allocator, allocator);
     packetPublish->WithTopic(topicFilter)
         .WithQOS(qos)
         .WithRetain(false)
@@ -586,7 +589,7 @@ static int s_AwsMqtt5CanaryOperationPublish(
     ++g_statistic.totalOperations;
     ++g_statistic.publish_attempt;
 
-    if (testClient->client->Publish(packetPublish, [testClient](int errorcode, std::shared_ptr<PublishResult> packet) {
+    if (testClient->client->Publish(packetPublish, [testClient](int errorcode, std::shared_ptr<PublishResult> ) {
             if (errorcode != 0)
             {
                 ++g_statistic.publish_failed;
@@ -878,7 +881,8 @@ int main(int argc, char **argv)
         uint16_t receive_maximum = 9;
         uint32_t maximum_packet_size = 128 * 1024;
 
-        std::shared_ptr<Mqtt5::ConnectPacket> packetConnect = std::make_shared<Mqtt5::ConnectPacket>(allocator);
+        std::shared_ptr<Mqtt5::ConnectPacket> packetConnect =
+            Aws::Crt::MakeShared<Mqtt5::ConnectPacket>(allocator, allocator);
         packetConnect->WithKeepAliveIntervalSec(30)
             .WithMaximumPacketSizeBytes(maximum_packet_size)
             .WithReceiveMaximum(receive_maximum);

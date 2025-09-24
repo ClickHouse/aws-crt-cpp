@@ -57,6 +57,7 @@ namespace Aws
         AWS_CRT_CPP_API ByteBuf ByteBufFromEmptyArray(const uint8_t *array, size_t len) noexcept;
         AWS_CRT_CPP_API ByteBuf ByteBufFromArray(const uint8_t *array, size_t capacity) noexcept;
         AWS_CRT_CPP_API ByteBuf ByteBufNewCopy(Allocator *alloc, const uint8_t *array, size_t len);
+        AWS_CRT_CPP_API ByteBuf ByteBufInit(Allocator *alloc, size_t len);
         AWS_CRT_CPP_API void ByteBufDelete(ByteBuf &);
 
         AWS_CRT_CPP_API ByteCursor ByteCursorFromCString(const char *str) noexcept;
@@ -65,8 +66,8 @@ namespace Aws
         AWS_CRT_CPP_API ByteCursor ByteCursorFromByteBuf(const ByteBuf &) noexcept;
         AWS_CRT_CPP_API ByteCursor ByteCursorFromArray(const uint8_t *array, size_t len) noexcept;
 
-        AWS_CRT_CPP_API Vector<uint8_t> Base64Decode(const String &decode);
-        AWS_CRT_CPP_API String Base64Encode(const Vector<uint8_t> &encode);
+        AWS_CRT_CPP_API Vector<uint8_t> Base64Decode(const String &decode) noexcept;
+        AWS_CRT_CPP_API String Base64Encode(const Vector<uint8_t> &encode) noexcept;
 
         template <typename RawType, typename TargetType> using TypeConvertor = std::function<TargetType(RawType)>;
 
@@ -160,6 +161,48 @@ namespace Aws
         }
 
         template <typename T> using ScopedResource = std::unique_ptr<T, std::function<void(T *)>>;
+
+        template <
+            typename Derived,
+            typename Base,
+            typename std::enable_if<std::is_base_of<Base, Derived>::value, bool>::type = true>
+        ScopedResource<Base> SafeSuperCast(ScopedResource<Derived> derived)
+        {
+            const auto &deleter = derived.get_deleter();
+            return ScopedResource<Base>(
+                derived.release(), [deleter](Base *base) { deleter(static_cast<Derived *>(base)); });
+        }
+
+        template <
+            typename Derived,
+            typename Base,
+            typename std::enable_if<!std::is_base_of<Base, Derived>::value, bool>::type = true>
+        ScopedResource<Base> SafeSuperCast(ScopedResource<Derived> derived)
+        {
+            (void)derived;
+            static_assert(std::is_base_of<Base, Derived>::value, "Base must be a base class of Derived");
+            return nullptr;
+        }
+
+        template <
+            typename Base,
+            typename Derived,
+            typename std::enable_if<std::is_base_of<Base, Derived>::value, bool>::type = true>
+        ScopedResource<Derived> SafeSubCast(ScopedResource<Base> base)
+        {
+            return ScopedResource<Derived>(static_cast<Derived *>(base.release()), base.get_deleter());
+        }
+
+        template <
+            typename Base,
+            typename Derived,
+            typename std::enable_if<!std::is_base_of<Base, Derived>::value, bool>::type = true>
+        ScopedResource<Derived> SafeSubCast(ScopedResource<Base> base)
+        {
+            (void)base;
+            static_assert(std::is_base_of<Base, Derived>::value, "Base must be a base class of Derived");
+            return nullptr;
+        }
 
     } // namespace Crt
 } // namespace Aws

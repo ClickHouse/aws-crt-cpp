@@ -118,5 +118,5 @@ namespace Aws
                 return true;
             }
         } // namespace Io
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws

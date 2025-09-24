@@ -91,7 +91,7 @@ namespace Aws
                  */
                 std::shared_ptr<MqttConnection> NewConnection(
                     const char *hostName,
-                    uint16_t port,
+                    uint32_t port,
                     const Io::SocketOptions &socketOptions,
                     const Crt::Io::TlsContext &tlsContext,
                     bool useWebsocket = false) noexcept;
@@ -109,7 +109,7 @@ namespace Aws
                  */
                 std::shared_ptr<MqttConnection> NewConnection(
                     const char *hostName,
-                    uint16_t port,
+                    uint32_t port,
                     const Io::SocketOptions &socketOptions,
                     bool useWebsocket = false) noexcept;
 
@@ -117,5 +117,5 @@ namespace Aws
                 aws_mqtt_client *m_client;
             };
         } // namespace Mqtt
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws
