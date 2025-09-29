@@ -80,6 +80,11 @@ namespace Aws
                 uint64_t GetExpirationTimepointInSeconds() const noexcept;
 
                 /**
+                 * Gets the value of the accountId of aws credentials
+                 */
+                ByteCursor GetAccountId() const noexcept;
+
+                /**
                  * Validity check - returns true if the instance is valid, false otherwise
                  */
                 explicit operator bool() const noexcept;
@@ -448,6 +453,48 @@ namespace Aws
             };
 
             /**
+             * Configuration options for the STS Web Identity credentials provider
+             */
+            struct AWS_CRT_CPP_API CredentialsProviderSTSWebIdentityConfig
+            {
+                CredentialsProviderSTSWebIdentityConfig();
+
+                /**
+                 * Arn of the role to assume by fetching credentials for
+                 */
+                String RoleArn;
+
+                /**
+                 * Assumed role session identifier to be associated with the sourced credentials
+                 */
+                String SessionName;
+
+                /**
+                 * Region used for STS call
+                 */
+                String Region;
+
+                /**
+                 * The OAuth 2.0 access token or OpenID Connect ID token
+                 */
+                String TokenFilePath;
+
+                /**
+                 * Connection bootstrap to use to create the http connection required to
+                 * query credentials from the STS provider
+                 *
+                 * Note: If null, then the default ClientBootstrap is used
+                 * (see Aws::Crt::ApiHandle::GetOrCreateStaticDefaultClientBootstrap)
+                 */
+                Io::ClientBootstrap *Bootstrap;
+
+                /**
+                 * TLS configuration for secure socket connections.
+                 */
+                Io::TlsConnectionOptions TlsConnectionOptions;
+            };
+
+            /**
              * Simple credentials provider implementation that wraps one of the internal C-based implementations.
              *
              * Contains a set of static factory methods for building each supported provider, as well as one for the
@@ -574,6 +621,10 @@ namespace Aws
                     const CredentialsProviderSTSConfig &config,
                     Allocator *allocator = ApiAllocator());
 
+                static std::shared_ptr<ICredentialsProvider> CreateCredentialsProviderSTSWebIdentity(
+                    const CredentialsProviderSTSWebIdentityConfig &config,
+                    Allocator *allocator = ApiAllocator());
+
               private:
                 static void s_onCredentialsResolved(aws_credentials *credentials, int error_code, void *user_data);
 
@@ -581,5 +632,5 @@ namespace Aws
                 aws_credentials_provider *m_provider;
             };
         } // namespace Auth
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws

@@ -9,6 +9,7 @@
 #include <aws/crt/io/TlsOptions.h>
 
 #include <aws/auth/auth.h>
+#include <aws/checksums/checksums.h>
 #include <aws/common/ref_count.h>
 #include <aws/event-stream/event_stream.h>
 #include <aws/http/http.h>
@@ -23,6 +24,7 @@ namespace Aws
     {
         static Crypto::CreateHashCallback s_BYOCryptoNewMD5Callback;
         static Crypto::CreateHashCallback s_BYOCryptoNewSHA256Callback;
+        static Crypto::CreateHashCallback s_BYOCryptoNewSHA1Callback;
         static Crypto::CreateHMACCallback s_BYOCryptoNewSHA256HMACCallback;
         static Io::NewClientTlsHandlerCallback s_BYOCryptoNewClientTlsHandlerCallback;
         static Io::NewTlsContextImplCallback s_BYOCryptoNewTlsContextImplCallback;
@@ -47,6 +49,7 @@ namespace Aws
             aws_s3_library_init(allocator);
             aws_event_stream_library_init(allocator);
             aws_sdkutils_library_init(allocator);
+            aws_checksums_library_init(allocator);
 
             JsonObject::OnLibraryInit();
         }
@@ -77,6 +80,7 @@ namespace Aws
             aws_mqtt_library_clean_up();
             aws_event_stream_library_clean_up();
             aws_sdkutils_library_clean_up();
+            aws_checksums_library_clean_up();
 
             s_BYOCryptoNewMD5Callback = nullptr;
             s_BYOCryptoNewSHA256Callback = nullptr;
@@ -130,7 +134,10 @@ namespace Aws
             aws_logger_set(&m_logger);
         }
 
-        void ApiHandle::SetShutdownBehavior(ApiHandleShutdownBehavior behavior) { m_shutdownBehavior = behavior; }
+        void ApiHandle::SetShutdownBehavior(ApiHandleShutdownBehavior behavior)
+        {
+            m_shutdownBehavior = behavior;
+        }
 
 #if BYO_CRYPTO
         static struct aws_hash *s_MD5New(struct aws_allocator *allocator)
@@ -180,6 +187,31 @@ namespace Aws
         {
             s_BYOCryptoNewSHA256Callback = std::move(callback);
             aws_set_sha256_new_fn(s_Sha256New);
+        }
+
+        static struct aws_hash *s_Sha1New(struct aws_allocator *allocator)
+        {
+            if (!s_BYOCryptoNewSHA1Callback)
+            {
+                AWS_LOGF_ERROR(
+                    AWS_LS_IO_TLS,
+                    "Must call ApiHandle::SetBYOCryptoNewSHA1Callback() before SHA1 hash can be created");
+                aws_raise_error(AWS_ERROR_UNIMPLEMENTED);
+                return nullptr;
+            }
+
+            auto hash = s_BYOCryptoNewSHA1Callback(AWS_SHA1_LEN, allocator);
+            if (!hash)
+            {
+                return nullptr;
+            }
+            return hash->SeatForCInterop(hash);
+        }
+
+        void ApiHandle::SetBYOCryptoNewSHA1Callback(Crypto::CreateHashCallback &&callback)
+        {
+            s_BYOCryptoNewSHA1Callback = std::move(callback);
+            aws_set_sha1_new_fn(s_Sha1New);
         }
 
         static struct aws_hmac *s_sha256HMACNew(struct aws_allocator *allocator, const struct aws_byte_cursor *secret)
@@ -274,6 +306,11 @@ namespace Aws
         {
             AWS_LOGF_WARN(
                 AWS_LS_IO_TLS, "SetBYOCryptoNewSHA256Callback() has no effect unless compiled with BYO_CRYPTO");
+        }
+
+        void ApiHandle::SetBYOCryptoNewSHA1Callback(Crypto::CreateHashCallback &&)
+        {
+            AWS_LOGF_WARN(AWS_LS_IO_TLS, "SetBYOCryptoNewSHA1Callback() has no effect unless compiled with BYO_CRYPTO");
         }
 
         void ApiHandle::SetBYOCryptoNewSHA256HMACCallback(Crypto::CreateHMACCallback &&)
@@ -375,11 +412,20 @@ namespace Aws
             return s_BYOCryptoIsTlsAlpnSupportedCallback;
         }
 
-        ApiHandle::Version ApiHandle::GetCrtVersion() const { return m_version; }
+        ApiHandle::Version ApiHandle::GetCrtVersion() const
+        {
+            return m_version;
+        }
 
-        const char *ErrorDebugString(int error) noexcept { return aws_error_debug_str(error); }
+        const char *ErrorDebugString(int error) noexcept
+        {
+            return aws_error_debug_str(error);
+        }
 
-        int LastError() noexcept { return aws_last_error(); }
+        int LastError() noexcept
+        {
+            return aws_last_error();
+        }
 
         int LastErrorOrUnknown() noexcept
         {

@@ -19,6 +19,7 @@ using namespace Aws::Crt::Auth;
 static const char *s_access_key_id = "AccessKey";
 static const char *s_secret_access_key = "Sekrit";
 static const char *s_session_token = "Token";
+static const char *s_account_id = "123456789012";
 
 class GetCredentialsWaiter
 {
@@ -46,8 +47,8 @@ class GetCredentialsWaiter
             m_credentials = nullptr;
         }
 
-        m_provider->GetCredentials(
-            [this](std::shared_ptr<Credentials> credentials, int error_code) { OnCreds(credentials, error_code); });
+        m_provider->GetCredentials([this](std::shared_ptr<Credentials> credentials, int error_code)
+                                   { OnCreds(credentials, error_code); });
 
         {
             std::unique_lock<std::mutex> lock(m_lock);
@@ -109,6 +110,58 @@ static int s_TestCredentialsConstruction(struct aws_allocator *allocator, void *
 }
 
 AWS_TEST_CASE(TestCredentialsConstruction, s_TestCredentialsConstruction)
+
+static int s_TestCredentialsConstructionWithAccountId(struct aws_allocator *allocator, void *ctx)
+{
+    (void)ctx;
+    {
+        ApiHandle apiHandle(allocator);
+        uint64_t expire = Aws::Crt::DateTime::Now().Millis() / 1000 + 3600;
+
+        struct aws_credentials_options creds_option;
+        AWS_ZERO_STRUCT(creds_option);
+        creds_option.access_key_id_cursor = aws_byte_cursor_from_c_str(s_access_key_id);
+        creds_option.secret_access_key_cursor = aws_byte_cursor_from_c_str(s_secret_access_key);
+        creds_option.session_token_cursor = aws_byte_cursor_from_c_str(s_session_token);
+        creds_option.account_id_cursor = aws_byte_cursor_from_c_str(s_account_id);
+        creds_option.expiration_timepoint_seconds = expire;
+
+        aws_credentials *raw_creds = aws_credentials_new_with_options(allocator, &creds_option);
+
+        ASSERT_NOT_NULL(raw_creds);
+        Credentials creds(raw_creds);
+        ASSERT_PTR_EQUALS(raw_creds, creds.GetUnderlyingHandle());
+        auto cursor = creds.GetAccessKeyId();
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&cursor, s_access_key_id));
+        cursor = creds.GetSecretAccessKey();
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&cursor, s_secret_access_key));
+        cursor = creds.GetSessionToken();
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&cursor, s_session_token));
+        cursor = creds.GetAccountId();
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&cursor, s_account_id));
+        ASSERT_UINT_EQUALS(expire, creds.GetExpirationTimepointInSeconds());
+
+        Credentials creds2(raw_creds);
+        ASSERT_TRUE(raw_creds == creds2.GetUnderlyingHandle());
+
+        // We can/should safely release the raw creds here, but remember creds still holds it by ref counting.
+        aws_credentials_release(raw_creds);
+
+        cursor = creds2.GetAccessKeyId();
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&cursor, s_access_key_id));
+        cursor = creds2.GetSecretAccessKey();
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&cursor, s_secret_access_key));
+        cursor = creds2.GetSessionToken();
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&cursor, s_session_token));
+        cursor = creds.GetAccountId();
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&cursor, s_account_id));
+        ASSERT_UINT_EQUALS(expire, creds2.GetExpirationTimepointInSeconds());
+    }
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(TestCredentialsConstructionWithAccountId, s_TestCredentialsConstructionWithAccountId)
 
 static int s_TestAnonymousCredentialsConstruction(struct aws_allocator *allocator, void *ctx)
 {
@@ -300,7 +353,8 @@ static int s_TestProviderDelegateGet(struct aws_allocator *allocator, void *ctx)
     {
         ApiHandle apiHandle(allocator);
 
-        auto delegateGetCredentials = [&allocator]() -> std::shared_ptr<Credentials> {
+        auto delegateGetCredentials = [&allocator]() -> std::shared_ptr<Credentials>
+        {
             Credentials credentials(
                 aws_byte_cursor_from_c_str(s_access_key_id),
                 aws_byte_cursor_from_c_str(s_secret_access_key),
@@ -336,7 +390,8 @@ static int s_TestProviderDelegateGetAnonymous(struct aws_allocator *allocator, v
     {
         ApiHandle apiHandle(allocator);
 
-        auto delegateGetCredentials = [&allocator]() -> std::shared_ptr<Credentials> {
+        auto delegateGetCredentials = [&allocator]() -> std::shared_ptr<Credentials>
+        {
             Credentials credentials(allocator);
             return Aws::Crt::MakeShared<Auth::Credentials>(allocator, credentials.GetUnderlyingHandle());
         };
@@ -376,7 +431,7 @@ static int s_InitializeProxyOptions(
     ASSERT_SUCCESS(aws_get_environment_value(allocator, s_httpProxyPortEnvVariable, &proxy_port));
 
     proxyOptions.HostName = Aws::Crt::String(aws_string_c_str(proxy_host_name));
-    proxyOptions.Port = static_cast<uint16_t>(atoi(aws_string_c_str(proxy_port)));
+    proxyOptions.Port = static_cast<uint32_t>(atoi(aws_string_c_str(proxy_port)));
 
     aws_string_destroy(proxy_host_name);
     aws_string_destroy(proxy_port);
@@ -562,3 +617,50 @@ static int s_STSCredentialsProviderGetSuccessProxy(struct aws_allocator *allocat
 }
 
 AWS_TEST_CASE(STSCredentialsProviderGetSuccessProxy, s_STSCredentialsProviderGetSuccessProxy)
+
+static int s_DoSTSWebIdentityCredentialsProviderFailureTest(struct aws_allocator *allocator, void *ctx)
+{
+    (void)ctx;
+    {
+        ApiHandle apiHandle(allocator);
+        apiHandle.InitializeLogging(Aws::Crt::LogLevel::Trace, stderr);
+
+        Aws::Crt::Io::EventLoopGroup eventLoopGroup(0, allocator);
+        ASSERT_TRUE(eventLoopGroup);
+
+        Aws::Crt::Io::DefaultHostResolver defaultHostResolver(eventLoopGroup, 8, 30, allocator);
+        ASSERT_TRUE(defaultHostResolver);
+
+        Aws::Crt::Io::ClientBootstrap clientBootstrap(eventLoopGroup, defaultHostResolver, allocator);
+        ASSERT_TRUE(clientBootstrap);
+        clientBootstrap.EnableBlockingShutdown();
+
+        Aws::Crt::Io::TlsContextOptions tlsOptions = Aws::Crt::Io::TlsContextOptions::InitDefaultClient(allocator);
+        Aws::Crt::Io::TlsContext tlsContext(tlsOptions, Aws::Crt::Io::TlsMode::CLIENT, allocator);
+        const auto connectionOptions = tlsContext.NewConnectionOptions();
+
+        CredentialsProviderSTSWebIdentityConfig config;
+        config.Bootstrap = &clientBootstrap;
+        config.TlsConnectionOptions = connectionOptions;
+        config.RoleArn = "arn:aws:iam::123456789012:role/role-name";
+        config.Region = "us-east-1";
+        config.TokenFilePath = "/not/a/real/file/path";
+        config.SessionName = "TestingSession";
+
+        auto provider = CredentialsProvider::CreateCredentialsProviderSTSWebIdentity(config, allocator);
+        ASSERT_NOT_NULL(provider.get());
+
+        GetCredentialsWaiter waiter(provider);
+
+        auto creds = waiter.GetCredentials();
+        ASSERT_NOT_NULL(creds.get());
+        ASSERT_TRUE(creds->GetAccessKeyId().len == 0);
+        ASSERT_TRUE(creds->GetSecretAccessKey().len == 0);
+        ASSERT_TRUE(creds->GetSessionToken().len == 0);
+        ASSERT_TRUE(creds->GetExpirationTimepointInSeconds() == 0);
+    }
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(STSWebIdentityCredentialsProviderFailureTest, s_DoSTSWebIdentityCredentialsProviderFailureTest);

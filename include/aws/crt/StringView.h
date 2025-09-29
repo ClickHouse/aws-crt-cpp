@@ -13,6 +13,7 @@
 #include <iterator>
 #include <limits>
 #include <stddef.h>
+#include <string>
 #include <type_traits>
 
 #if __cplusplus >= 201703L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L)
@@ -819,25 +820,35 @@ namespace Aws
         {
             inline namespace string_view_literals
             {
-                inline basic_string_view<char> operator"" _sv(const char *s, size_t length) noexcept
+#if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
+/* On GCC <= 4.8, use old syntax for literal operator (with space after ""). It can't do the modern syntax */
+#    define OPERATOR_LITERAL_SV operator"" _sv
+#else
+/* else use modern syntax (no space after "") to avoid -Wdeprecated-literal-operator warning on Clang 16+ */
+#    define OPERATOR_LITERAL_SV operator""_sv
+#endif
+
+                inline basic_string_view<char> OPERATOR_LITERAL_SV(const char *s, size_t length) noexcept
                 {
                     return basic_string_view<char>(s, length);
                 }
 
-                inline basic_string_view<wchar_t> operator"" _sv(const wchar_t *s, size_t length) noexcept
+                inline basic_string_view<wchar_t> OPERATOR_LITERAL_SV(const wchar_t *s, size_t length) noexcept
                 {
                     return basic_string_view<wchar_t>(s, length);
                 }
 
-                inline basic_string_view<char16_t> operator"" _sv(const char16_t *s, size_t length) noexcept
+                inline basic_string_view<char16_t> OPERATOR_LITERAL_SV(const char16_t *s, size_t length) noexcept
                 {
                     return basic_string_view<char16_t>(s, length);
                 }
 
-                inline basic_string_view<char32_t> operator"" _sv(const char32_t *s, size_t length) noexcept
+                inline basic_string_view<char32_t> OPERATOR_LITERAL_SV(const char32_t *s, size_t length) noexcept
                 {
                     return basic_string_view<char32_t>(s, length);
                 }
+
+#undef OPERATOR_LITERAL_SV
             } // namespace string_view_literals
 
         } // namespace literals
@@ -859,6 +870,6 @@ namespace std
         const Aws::Crt::basic_string_view<CharT, Traits> &val) const noexcept
     {
         auto str = std::basic_string<CharT, Traits>(val.data(), val.size());
-        return std::hash<std::basic_string<CharT, Traits>>()(str);
+        return std::hash<std::basic_string<CharT, Traits>>{}(str);
     }
 } // namespace std

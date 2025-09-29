@@ -5,7 +5,6 @@
  */
 
 #include <aws/crt/mqtt/Mqtt5Client.h>
-#include <aws/crt/mqtt/Mqtt5Packets.h>
 #include <aws/crt/mqtt/Mqtt5Types.h>
 
 namespace Aws
@@ -23,16 +22,16 @@ namespace Aws
             class AWS_CRT_CPP_API UserProperty
             {
               public:
-                UserProperty(Crt::String key, Crt::String value) noexcept;
+                UserProperty(const Crt::String &name, const Crt::String &value) noexcept;
+                UserProperty(Crt::String &&name, Crt::String &&value) noexcept;
 
                 const Crt::String &getName() const noexcept { return m_name; };
                 const Crt::String &getValue() const noexcept { return m_value; }
 
-                ~UserProperty() noexcept;
-                UserProperty(const UserProperty &toCopy) noexcept;
-                UserProperty(UserProperty &&toMove) noexcept;
-                UserProperty &operator=(const UserProperty &toCopy) noexcept;
-                UserProperty &operator=(UserProperty &&toMove) noexcept;
+                bool operator==(const UserProperty &other) const
+                {
+                    return m_name == other.m_name && m_value == other.m_value;
+                }
 
               private:
                 Crt::String m_name;
@@ -42,6 +41,7 @@ namespace Aws
             class AWS_CRT_CPP_API IPacket
             {
               public:
+                virtual ~IPacket() = default;
                 virtual PacketType getType() = 0;
             };
 
@@ -158,6 +158,15 @@ namespace Aws
                  * @return The PublishPacket Object after setting the correlation data.
                  */
                 PublishPacket &WithCorrelationData(ByteCursor correlationData) noexcept;
+
+                /**
+                 * Sets the property specifying the content type of the payload. Not internally meaningful to MQTT5.
+                 *
+                 * See [MQTT5 Content Type](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901118)
+                 * @param contentType The property specifying the content type of the payload.
+                 * @return The PublishPacket Object after setting the content type.
+                 */
+                PublishPacket &WithContentType(ByteCursor contentType) noexcept;
 
                 /**
                  * Sets the list of MQTT5 user properties included with the packet.
@@ -577,7 +586,7 @@ namespace Aws
                  */
                 const Crt::String &getClientId() const noexcept;
 
-                virtual ~NegotiatedSettings(){};
+                virtual ~NegotiatedSettings() {};
                 NegotiatedSettings(const NegotiatedSettings &) = delete;
                 NegotiatedSettings(NegotiatedSettings &&) noexcept = delete;
                 NegotiatedSettings &operator=(const NegotiatedSettings &) = delete;
@@ -1388,7 +1397,7 @@ namespace Aws
                  */
                 const Crt::Optional<String> &getServerReference() const noexcept;
 
-                virtual ~ConnAckPacket(){};
+                virtual ~ConnAckPacket() {};
                 ConnAckPacket(const ConnAckPacket &) = delete;
                 ConnAckPacket(ConnAckPacket &&) noexcept = delete;
                 ConnAckPacket &operator=(const ConnAckPacket &) = delete;
@@ -1802,7 +1811,7 @@ namespace Aws
                  */
                 const Crt::Vector<UserProperty> &getUserProperties() const noexcept;
 
-                virtual ~PubAckPacket(){};
+                virtual ~PubAckPacket() {};
                 PubAckPacket(const PubAckPacket &toCopy) noexcept = delete;
                 PubAckPacket(PubAckPacket &&toMove) noexcept = delete;
                 PubAckPacket &operator=(const PubAckPacket &toCopy) noexcept = delete;
@@ -1968,7 +1977,7 @@ namespace Aws
 
                 bool initializeRawOptions(aws_mqtt5_subscription_view &raw_options) const noexcept;
 
-                virtual ~Subscription(){};
+                virtual ~Subscription() {};
                 Subscription(const Subscription &) noexcept;
                 Subscription(Subscription &&) noexcept;
                 Subscription &operator=(const Subscription &) noexcept;
@@ -2404,5 +2413,5 @@ namespace Aws
             };
 
         } // namespace Mqtt5
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws

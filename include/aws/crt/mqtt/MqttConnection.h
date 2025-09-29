@@ -263,7 +263,7 @@ namespace Aws
                 bool Disconnect() noexcept;
 
                 /// @private
-                aws_mqtt_client_connection *GetUnderlyingConnection() noexcept;
+                aws_mqtt_client_connection *GetUnderlyingConnection() const noexcept;
 
                 /**
                  * Subscribes to topicFilter. OnMessageReceivedHandler will be invoked from an event-loop
@@ -458,5 +458,5 @@ namespace Aws
                 std::shared_ptr<MqttConnectionCore> m_connectionCore;
             };
         } // namespace Mqtt
-    }     // namespace Crt
+    } // namespace Crt
 } // namespace Aws
