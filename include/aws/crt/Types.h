@@ -149,18 +149,19 @@ namespace Aws
 
         template <typename T, typename... Args> T *New(Allocator *allocator, Args &&...args)
         {
-            T *t = reinterpret_cast<T *>(aws_mem_acquire(allocator, sizeof(T)));
-            if (!t)
+            // Construct into the raw memory: a pointer to a T that does not exist yet fails Clang CFI.
+            void *memory = aws_mem_acquire(allocator, sizeof(T));
+            if (!memory)
                 return nullptr;
-            return new (t) T(std::forward<Args>(args)...);
+            return new (memory) T(std::forward<Args>(args)...);
         }
 
         template <typename T, typename... Args> std::shared_ptr<T> MakeShared(Allocator *allocator, Args &&...args)
         {
-            T *t = reinterpret_cast<T *>(aws_mem_acquire(allocator, sizeof(T)));
-            if (!t)
+            void *memory = aws_mem_acquire(allocator, sizeof(T));
+            if (!memory)
                 return nullptr;
-            new (t) T(std::forward<Args>(args)...);
+            T *t = new (memory) T(std::forward<Args>(args)...);
 
             return std::shared_ptr<T>(t, [allocator](T *obj) { Delete(obj, allocator); });
         }
